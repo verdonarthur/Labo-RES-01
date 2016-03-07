@@ -1,13 +1,9 @@
 package ch.heigvd.res.io;
 
+import ch.heigvd.res.io.util.StatsCSV;
 import ch.heigvd.res.io.util.Timer;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+
+import java.io.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,6 +21,7 @@ import java.util.logging.Logger;
 public class BufferedIOBenchmark {
 
 	static final Logger LOG = Logger.getLogger(BufferedIOBenchmark.class.getName());
+    private static StatsCSV stats;
 
 	/**
 	 * This enum is used to describe the 4 different strategies for doing the IOs
@@ -74,7 +71,9 @@ public class BufferedIOBenchmark {
 				LOG.log(Level.SEVERE, ex.getMessage(), ex);
 			}
 		}
-		LOG.log(Level.INFO, "  > Done in {0} ms.", Timer.takeTime());
+        long time = Timer.takeTime();
+		LOG.log(Level.INFO, "  > Done in {0} ms.",time );
+        stats.addData("WRITE",ioStrategy.toString(),(int)numberOfBytesToWrite,(int)blockSize,(int)time);
 	}
 	
 	/**
@@ -123,6 +122,8 @@ public class BufferedIOBenchmark {
 		LOG.log(Level.INFO, "Consuming test data ({0}, block size: {1}...", new Object[]{ioStrategy, blockSize});
 		Timer.start();
 
+        int totalBlock = 0;
+
 		InputStream is = null;
 		try {
 			// Let's connect our stream to a file data sink
@@ -134,7 +135,7 @@ public class BufferedIOBenchmark {
 			}
 
 			// Now, let's call the method that does the actual work and produces bytes on the stream
-			consumeDataFromStream(is, ioStrategy, blockSize);
+            totalBlock = consumeDataFromStream(is, ioStrategy, blockSize);
 
 			// We are done, so we only have to close the input stream
 			is.close();
@@ -149,8 +150,9 @@ public class BufferedIOBenchmark {
 				LOG.log(Level.SEVERE, ex.getMessage(), ex);
 			}
 		}
-		LOG.log(Level.INFO, "  > Done in {0} ms.", Timer.takeTime());
-
+        long time = Timer.takeTime();
+		LOG.log(Level.INFO, "  > Done in {0} ms.", time);
+        stats.addData("READ",ioStrategy.toString(),(int)totalBlock,(int)blockSize,(int)time);
 	}
 
 	/**
@@ -158,7 +160,7 @@ public class BufferedIOBenchmark {
 	 * Depending on the strategy, the method either reads bytes one by one OR in chunks (the size of the chunk
 	 * is passed in parameter). The method does not do anything with the read bytes, except counting them.
 	 */ 
-	private void consumeDataFromStream(InputStream is, IOStrategy ioStrategy, int blockSize) throws IOException {
+	private int consumeDataFromStream(InputStream is, IOStrategy ioStrategy, int blockSize) throws IOException {
 		int totalBytes = 0;
 		// If the strategy dictates to write byte by byte, then it's easy to write the loop; but let's just hope that our client has 
 		// given us a buffered output stream, otherwise the performance will be really bad
@@ -180,6 +182,7 @@ public class BufferedIOBenchmark {
 		}
 		
 		LOG.log(Level.INFO, "Number of bytes read: {0}", new Object[]{totalBytes});
+        return totalBytes;
 	}
 
 	/**
@@ -190,12 +193,15 @@ public class BufferedIOBenchmark {
 
 		BufferedIOBenchmark bm = new BufferedIOBenchmark();
 
+        stats = new StatsCSV();
+
 		LOG.log(Level.INFO, "");
 		LOG.log(Level.INFO, "*** BENCHMARKING WRITE OPERATIONS (with BufferedStream)", Timer.takeTime());
 		bm.produceTestData(IOStrategy.BlockByBlockWithBufferedStream, NUMBER_OF_BYTES_TO_WRITE, 500);
-		bm.produceTestData(IOStrategy.BlockByBlockWithBufferedStream, NUMBER_OF_BYTES_TO_WRITE, 50);
-		bm.produceTestData(IOStrategy.BlockByBlockWithBufferedStream, NUMBER_OF_BYTES_TO_WRITE, 5);
-		bm.produceTestData(IOStrategy.ByteByByteWithBufferedStream, NUMBER_OF_BYTES_TO_WRITE, 0);
+        bm.produceTestData(IOStrategy.BlockByBlockWithBufferedStream, NUMBER_OF_BYTES_TO_WRITE, 50);
+        bm.produceTestData(IOStrategy.BlockByBlockWithBufferedStream, NUMBER_OF_BYTES_TO_WRITE, 5);
+        bm.produceTestData(IOStrategy.ByteByByteWithBufferedStream, NUMBER_OF_BYTES_TO_WRITE, 0);
+
 
 		LOG.log(Level.INFO, "");
 		LOG.log(Level.INFO, "*** BENCHMARKING WRITE OPERATIONS (without BufferedStream)", Timer.takeTime());
@@ -217,6 +223,8 @@ public class BufferedIOBenchmark {
 		bm.consumeTestData(IOStrategy.BlockByBlockWithoutBufferedStream, 50);
 		bm.consumeTestData(IOStrategy.BlockByBlockWithoutBufferedStream, 5);
 		bm.consumeTestData(IOStrategy.ByteByByteWithoutBufferedStream, 0);
+
+		stats.close();
 	}
 
 }
